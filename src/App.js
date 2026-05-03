@@ -11,241 +11,321 @@ const MENU = [
   { id: 6, name: "Fresh Lemonade",    price: 9  },
 ];
 
+const ALL_MENU_ITEMS = [
+  "Iced Americano","Iced Latte","Iced Chocolate",
+  "Iced Mocha","Iced Matcha Latte","Fresh Lemonade",
+];
+
 const BG    = "#f5f5ef";
 const NAVY  = "#211f60";
 const WHITE = "#ffffff";
 const MUTED = "#8a8880";
+const ORANGE = "#e07830";
+const BLUE_EVE = "#3a6abf";
 
-const VIEWS = { CUSTOMER: "customer", BARISTA: "barista", RECORDS: "records" };
+const VIEWS = { CUSTOMER:"customer", BARISTA:"barista", RECORDS:"records" };
 
 function formatTime(ts) {
   const d = new Date(ts);
-  return d.toLocaleTimeString("en-MY", { hour: "2-digit", minute: "2-digit" }) +
-    " · " + d.toLocaleDateString("en-MY", { day: "numeric", month: "short" });
+  return d.toLocaleTimeString("en-MY",{hour:"2-digit",minute:"2-digit"}) +
+    " · " + d.toLocaleDateString("en-MY",{day:"numeric",month:"short"});
 }
 
-// All fixed menu items — always shown in summary even with 0 sales
-const ALL_MENU_ITEMS = [
-  "Iced Americano", "Iced Latte", "Iced Chocolate",
-  "Iced Mocha", "Iced Matcha Latte", "Fresh Lemonade",
-];
+function isEvening(ts) {
+  return new Date(ts).getHours() >= 15;
+}
+
+function getDayKey(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString("en-MY",{day:"numeric",month:"short",year:"numeric"});
+}
 
 function exportToCSV(orders) {
-  if (orders.length === 0) return;
-
-  // Group by month → day
+  if (!orders.length) return;
   const months = {};
   orders.forEach(o => {
     const d = new Date(o.timestamp);
-    const monthKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-    const monthLabel = d.toLocaleDateString("en-MY", { month: "long", year: "numeric" });
-    const dayKey = d.toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
-    const dayShort = d.toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short" });
-    if (!months[monthKey]) months[monthKey] = { label: monthLabel, days: {} };
-    if (!months[monthKey].days[dayKey]) months[monthKey].days[dayKey] = { label: dayShort, orders: [] };
-    months[monthKey].days[dayKey].orders.push(o);
+    const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    const ml = d.toLocaleDateString("en-MY",{month:"long",year:"numeric"});
+    const dk = getDayKey(o.timestamp);
+    const ds = d.toLocaleDateString("en-MY",{weekday:"short",day:"numeric",month:"short"});
+    if (!months[mk]) months[mk] = {label:ml, days:{}};
+    if (!months[mk].days[dk]) months[mk].days[dk] = {label:ds, orders:[]};
+    months[mk].days[dk].orders.push(o);
   });
-
   const allSheets = [];
-
-  Object.entries(months).sort().forEach(([, month]) => {
-    const days = Object.entries(month.days).sort((a, b) => new Date(a[0]) - new Date(b[0]));
-
-    // ── BUILD ORDER ROWS ──
-    // Each drink in an order gets its own row.
-    // Same order no & time repeated per drink line. Sale shown only on first line of that order.
-    // Per day: expand orders into drink lines
-    const dayLines = days.map(([, day]) => {
+  Object.entries(months).sort().forEach(([,month]) => {
+    const days = Object.entries(month.days).sort((a,b)=>new Date(a[0])-new Date(b[0]));
+    const dayLines = days.map(([,day]) => {
       const lines = [];
-      const sorted = [...day.orders].sort((a, b) => a.timestamp - b.timestamp);
-      sorted.forEach((o, idx) => {
+      [...day.orders].sort((a,b)=>a.timestamp-b.timestamp).forEach((o,idx) => {
         const t = new Date(o.timestamp);
-        const time = t.toLocaleTimeString("en-MY", { hour: "2-digit", minute: "2-digit", hour12: false }).replace(":", "");
-        const orderNo = idx + 1;
-        o.items.forEach((it, iIdx) => {
-          // Repeat one row per qty unit so each cup is its own line
-          for (let q = 0; q < it.qty; q++) {
+        const time = t.toLocaleTimeString("en-MY",{hour:"2-digit",minute:"2-digit",hour12:false}).replace(":","");
+        o.items.forEach((it,iIdx) => {
+          for (let q=0;q<it.qty;q++) {
             lines.push({
-              no: iIdx === 0 && q === 0 ? orderNo : "",      // order no only on first line
-              time: iIdx === 0 && q === 0 ? time : "",        // time only on first line
+              no: iIdx===0&&q===0 ? idx+1 : "",
+              time: iIdx===0&&q===0 ? time : "",
               item: it.name,
-              sale: iIdx === 0 && q === 0 ? `MYR ${o.total.toFixed(2)}` : "", // sale on first line only
+              sale: iIdx===0&&q===0 ? `MYR ${o.total.toFixed(2)}` : "",
             });
           }
         });
       });
       return lines;
     });
-
-    const maxLines = Math.max(...dayLines.map(l => l.length), 1);
-
-    // Header row 1: day labels spanning 4 cols (NO, TIME, ITEM, SALE) + spacer
+    const maxLines = Math.max(...dayLines.map(l=>l.length),1);
     const dayHeaderRow = [""];
-    days.forEach(([, day]) => { dayHeaderRow.push(day.label, "", "", ""); });
-
-    // Header row 2: column labels
-    const colHeaderRow = ["NO."];
-    days.forEach(() => { colHeaderRow.push("TIME STAMP", "ITEM SOLD", "SALE (RM)", ""); });
-
+    days.forEach(([,day])=>{ dayHeaderRow.push(day.label,"","",""); });
+    const colHeaderRow = [""];
+    days.forEach(()=>{ colHeaderRow.push("TIME STAMP","ITEM SOLD","SALE (RM)",""); });
     const orderRows = [];
-    for (let i = 0; i < maxLines; i++) {
+    for (let i=0;i<maxLines;i++) {
       const row = [""];
       dayLines.forEach(lines => {
         const line = lines[i];
-        if (line) {
-          row.push(line.no, line.time, line.item, line.sale);
-        } else {
-          row.push("", "", "", "");
-        }
+        row.push(line?line.no:"", line?line.time:"", line?line.item:"", line?line.sale:"");
       });
-      // Replace first cell with row number only when it's a real first-line
-      // (already handled above via line.no)
       orderRows.push(row);
     }
-    // Fix: first column should be empty (row index col not needed, order no is per-day)
-    // Actually re-check: dayHeaderRow starts with "" spacer, colHeaderRow starts with "NO."
-    // Let's keep it clean — first col is just a spacer col
-    colHeaderRow[0] = "";
-
-    // ── BUILD SUMMARY (PIVOT) ──
-    // All menu items always shown. Custom "Others" items also included if they appeared.
     const customItems = new Set();
-    days.forEach(([, day]) => {
-      day.orders.forEach(o => {
-        o.items.forEach(it => {
-          if (!ALL_MENU_ITEMS.includes(it.name)) customItems.add(it.name);
-        });
-      });
-    });
+    days.forEach(([,day])=>day.orders.forEach(o=>o.items.forEach(it=>{
+      if (!ALL_MENU_ITEMS.includes(it.name)) customItems.add(it.name);
+    })));
     const summaryItems = [...ALL_MENU_ITEMS, ...customItems];
-
-    const pivotHeaderRow = ["SUMMARY"];
-    days.forEach(([, day]) => { pivotHeaderRow.push(day.label, "", "", ""); });
-
-    const pivotSubHeaderRow = ["ITEM"];
-    days.forEach(() => { pivotSubHeaderRow.push("QTY SOLD", "REVENUE (RM)", "", ""); });
-
+    const pivotHeader = ["SUMMARY"];
+    days.forEach(([,day])=>pivotHeader.push(day.label,"","",""));
+    const pivotSubHeader = ["ITEM"];
+    days.forEach(()=>pivotSubHeader.push("QTY SOLD","REVENUE (RM)","",""));
     const pivotRows = summaryItems.map(item => {
       const row = [item];
-      days.forEach(([, day]) => {
-        let qty = 0, rev = 0;
-        day.orders.forEach(o => {
-          o.items.forEach(it => {
-            if (it.name === item) { qty += it.qty; rev += it.qty * it.price; }
-          });
-        });
-        row.push(qty, qty > 0 ? `MYR ${rev.toFixed(2)}` : "MYR 0.00", "", "");
+      days.forEach(([,day]) => {
+        let qty=0,rev=0;
+        day.orders.forEach(o=>o.items.forEach(it=>{
+          if (it.name===item){qty+=it.qty;rev+=it.qty*it.price;}
+        }));
+        row.push(qty, `MYR ${rev.toFixed(2)}`, "", "");
       });
       return row;
     });
-
     const totalRow = ["TOTAL"];
-    days.forEach(([, day]) => {
-      const rev = day.orders.reduce((s, o) => s + o.total, 0);
-      const count = day.orders.length;
-      totalRow.push(`${count} orders`, `MYR ${rev.toFixed(2)}`, "", "");
+    days.forEach(([,day])=>{
+      const rev = day.orders.reduce((s,o)=>s+o.total,0);
+      totalRow.push(`${day.orders.length} orders`,`MYR ${rev.toFixed(2)}`,"","");
     });
-
     allSheets.push(
-      [`=== ${month.label} ===`],
-      dayHeaderRow,
-      colHeaderRow,
-      ...orderRows,
-      [""],
-      pivotHeaderRow,
-      pivotSubHeaderRow,
-      ...pivotRows,
-      totalRow,
-      [""], [""],
+      [`=== ${month.label} ===`],dayHeaderRow,colHeaderRow,
+      ...orderRows,[""],pivotHeader,pivotSubHeader,...pivotRows,totalRow,[""],[""],
     );
   });
-
-  const csv = allSheets.map(row =>
-    row.map(cell => {
-      const s = String(cell ?? "");
-      return s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
-    }).join(",")
-  ).join("\n");
-
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const csv = allSheets.map(row=>row.map(cell=>{
+    const s=String(cell??"");
+    return s.includes(",")||s.includes('"') ? `"${s.replace(/"/g,'""')}"` : s;
+  }).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  const now = new Date();
-  a.download = `lungo_sales_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,"0")}.csv`;
+  a.href=url;
+  const now=new Date();
+  a.download=`lungo_sales_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,"0")}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
+// ── CHARTS ──
+function BarChart({ orders, dayKey }) {
+  const dayOrders = orders.filter(o => getDayKey(o.timestamp) === dayKey);
+  const itemTotals = {};
+  ALL_MENU_ITEMS.forEach(n => { itemTotals[n] = {morning:0, evening:0}; });
+  dayOrders.forEach(o => {
+    const eve = isEvening(o.timestamp);
+    o.items.forEach(it => {
+      if (!itemTotals[it.name]) itemTotals[it.name] = {morning:0, evening:0};
+      if (eve) itemTotals[it.name].evening += it.qty;
+      else     itemTotals[it.name].morning += it.qty;
+    });
+  });
+  const items = Object.entries(itemTotals);
+  const maxVal = Math.max(...items.map(([,v])=>v.morning+v.evening), 1);
+  const chartH = 180;
+  const labelH = 70; // space for rotated labels below
+  const topPad = 22; // space for qty label above tallest bar
+  const barW = 40;
+  const gap = 16;
+  const leftPad = 20;
+  const totalW = leftPad + items.length * (barW + gap);
+  return (
+    <div style={{overflowX:"auto", paddingBottom:8}}>
+      <svg width={Math.max(totalW+20, 320)} height={topPad+chartH+labelH} style={{display:"block"}}>
+        {items.map(([name, vals], i) => {
+          const x = leftPad + i*(barW+gap);
+          const mH = Math.round((vals.morning/maxVal)*chartH);
+          const eH = Math.round((vals.evening/maxVal)*chartH);
+          const total = vals.morning + vals.evening;
+          const barTop = topPad + chartH - eH - mH;
+          return (
+            <g key={name}>
+              {/* Evening (bottom) */}
+              <rect x={x} y={topPad+chartH-eH} width={barW} height={eH} fill={BLUE_EVE} rx={3} opacity={0.85}/>
+              {/* Morning (on top) */}
+              <rect x={x} y={topPad+chartH-eH-mH} width={barW} height={mH} fill={ORANGE} rx={3} opacity={0.85}/>
+              {/* Total label — always visible above bar */}
+              {total>0 && <text x={x+barW/2} y={barTop-5} textAnchor="middle" fontSize={12} fill={NAVY} fontWeight="bold">{total}</text>}
+              {/* Full name rotated -45deg */}
+              <text
+                x={x+barW/2}
+                y={topPad+chartH+8}
+                textAnchor="end"
+                fontSize={10}
+                fill={MUTED}
+                transform={`rotate(-40, ${x+barW/2}, ${topPad+chartH+8})`}
+              >{name}</text>
+            </g>
+          );
+        })}
+        {/* Axes */}
+        <line x1={leftPad-4} y1={topPad} x2={leftPad-4} y2={topPad+chartH} stroke={NAVY} strokeWidth={1} opacity={0.2}/>
+        <line x1={leftPad-4} y1={topPad+chartH} x2={totalW+16} y2={topPad+chartH} stroke={NAVY} strokeWidth={1} opacity={0.2}/>
+      </svg>
+      <div style={{display:"flex",gap:16,marginTop:4,paddingLeft:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:MUTED}}>
+          <div style={{width:12,height:12,background:ORANGE,borderRadius:2}}/>Morning
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:MUTED}}>
+          <div style={{width:12,height:12,background:BLUE_EVE,borderRadius:2}}/>Evening/Night
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LineChart({ orders, dayKey }) {
+  const dayOrders = orders.filter(o => getDayKey(o.timestamp) === dayKey);
+  // Bucket revenue into 1-hour slots 7am–midnight
+  const slots = {};
+  for (let h=7;h<=24;h++) slots[h]=0;
+  dayOrders.forEach(o => {
+    const h = new Date(o.timestamp).getHours();
+    const bucket = Math.min(Math.max(h,7),24);
+    slots[bucket] = (slots[bucket]||0) + o.total;
+  });
+  const hours = Object.keys(slots).map(Number);
+  const vals = hours.map(h=>slots[h]);
+  const maxVal = Math.max(...vals, 1);
+  const W = 320, H = 160, padT = 16, padB = 32, padL = 36, padR = 12;
+  const pts = hours.map((h,i) => {
+    const x = padL + (i/(hours.length-1))*(W-padL-padR);
+    const y = padT + (1 - vals[i]/maxVal)*(H-padT-padB);
+    return {x,y,h,v:vals[i]};
+  });
+  const pathD = pts.map((p,i)=>`${i===0?"M":"L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  return (
+    <div style={{overflowX:"auto"}}>
+      <svg width={W} height={H} style={{display:"block"}}>
+        {/* Grid lines */}
+        {[0,0.25,0.5,0.75,1].map(f => {
+          const y = padT + (1-f)*(H-padT-padB);
+          return <line key={f} x1={padL} y1={y} x2={W-padR} y2={y} stroke={NAVY} strokeWidth={0.5} opacity={0.12}/>;
+        })}
+        {/* 3pm line */}
+        {(() => {
+          const idx = hours.indexOf(15);
+          if (idx<0) return null;
+          const x = padL + (idx/(hours.length-1))*(W-padL-padR);
+          return <line x1={x} y1={padT} x2={x} y2={H-padB} stroke={BLUE_EVE} strokeWidth={1} strokeDasharray="4,3" opacity={0.5}/>;
+        })()}
+        {/* Shaded area */}
+        <path d={`${pathD} L${pts[pts.length-1].x.toFixed(1)},${(H-padB).toFixed(1)} L${pts[0].x.toFixed(1)},${(H-padB).toFixed(1)} Z`}
+          fill={NAVY} opacity={0.06}/>
+        {/* Line */}
+        <path d={pathD} fill="none" stroke={NAVY} strokeWidth={2.5} strokeLinejoin="round"/>
+        {/* Dots */}
+        {pts.map((p,i) => p.v>0 && (
+          <circle key={i} cx={p.x} cy={p.y} r={4} fill={p.h>=15 ? BLUE_EVE : ORANGE}/>
+        ))}
+        {/* X axis labels — every 3hrs */}
+        {pts.filter(p=>p.h%3===0).map((p,i)=>(
+          <text key={i} x={p.x} y={H-padB+14} textAnchor="middle" fontSize={9} fill={MUTED}>
+            {p.h===24?"12am":`${p.h>12?p.h-12:p.h}${p.h>=12?"pm":"am"}`}
+          </text>
+        ))}
+        {/* Y axis max label */}
+        <text x={padL-4} y={padT+4} textAnchor="end" fontSize={9} fill={MUTED}>RM{maxVal}</text>
+        {/* Axes */}
+        <line x1={padL} y1={padT} x2={padL} y2={H-padB} stroke={NAVY} strokeWidth={1} opacity={0.2}/>
+        <line x1={padL} y1={H-padB} x2={W-padR} y2={H-padB} stroke={NAVY} strokeWidth={1} opacity={0.2}/>
+      </svg>
+      <p style={{fontSize:10,color:MUTED,marginTop:4}}>Dashed line = 3pm (session split). Dots: orange=morning, blue=evening.</p>
+    </div>
+  );
+}
+
 export default function App() {
-  const [view, setView]       = useState(VIEWS.CUSTOMER);
-  const [cart, setCart]       = useState([]);
-  const [stage, setStage]     = useState("menu");
-  const [orders, setOrders]   = useState([]);
-  const [showOthers, setShowOthers] = useState(false);
-  const [otherName, setOtherName]   = useState("");
-  const [otherPrice, setOtherPrice] = useState("");
+  const [view, setView]     = useState(VIEWS.CUSTOMER);
+  const [cart, setCart]     = useState([]);
+  const [stage, setStage]   = useState("menu");
+  const [orders, setOrders] = useState([]);
+  const [showOthers, setShowOthers]   = useState(false);
+  const [otherName, setOtherName]     = useState("");
+  const [otherPrice, setOtherPrice]   = useState("");
+  const [selectedDay, setSelectedDay] = useState(null);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem("lungo_orders_v2");
       if (saved) setOrders(JSON.parse(saved));
-    } catch (_) {}
-  }, []);
+    } catch(_){}
+  },[]);
 
   const saveOrders = useCallback((updater) => {
     setOrders(prev => {
-      const updated = typeof updater === "function" ? updater(prev) : updater;
-      try { localStorage.setItem("lungo_orders_v2", JSON.stringify(updated)); } catch (_) {}
+      const updated = typeof updater==="function" ? updater(prev) : updater;
+      try { localStorage.setItem("lungo_orders_v2", JSON.stringify(updated)); } catch(_){}
       return updated;
     });
-  }, []);
+  },[]);
 
-  const addItem = (item) =>
-    setCart(prev => {
-      const ex = prev.find(c => c.id === item.id);
-      return ex ? prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
-                : [...prev, { ...item, qty: 1 }];
-    });
-
-  const removeItem = (id) =>
-    setCart(prev => prev.map(c => c.id === id ? { ...c, qty: c.qty - 1 } : c).filter(c => c.qty > 0));
-
-  const total     = cart.reduce((s, c) => s + c.price * c.qty, 0);
-  const itemCount = cart.reduce((s, c) => s + c.qty, 0);
+  const addItem = item => setCart(prev => {
+    const ex = prev.find(c=>c.id===item.id);
+    return ex ? prev.map(c=>c.id===item.id?{...c,qty:c.qty+1}:c) : [...prev,{...item,qty:1}];
+  });
+  const removeItem = id => setCart(prev=>prev.map(c=>c.id===id?{...c,qty:c.qty-1}:c).filter(c=>c.qty>0));
+  const total = cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const itemCount = cart.reduce((s,c)=>s+c.qty,0);
 
   const handlePaymentReceived = () => {
     const newOrder = {
-      id: Date.now(),
-      items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
-      total, timestamp: Date.now(), status: "pending",
+      id:Date.now(),
+      items:cart.map(c=>({name:c.name,qty:c.qty,price:c.price})),
+      total, timestamp:Date.now(), status:"pending",
     };
-    saveOrders(prev => [newOrder, ...prev]);
+    saveOrders(prev=>[newOrder,...prev]);
     setStage("thankyou");
-    setTimeout(() => { setCart([]); setStage("menu"); }, 3500);
+    setTimeout(()=>{setCart([]);setStage("menu");},3500);
   };
+  const markDone = id => saveOrders(prev=>prev.map(o=>o.id===id?{...o,status:"done"}:o));
 
-  const markDone = (id) =>
-    saveOrders(prev => prev.map(o => o.id === id ? { ...o, status: "done" } : o));
+  const pendingOrders = orders.filter(o=>o.status==="pending");
+  const doneOrders    = orders.filter(o=>o.status==="done");
 
-  const pendingOrders = orders.filter(o => o.status === "pending");
-  const doneOrders    = orders.filter(o => o.status === "done");
+  // Available days for chart selector
+  const availDays = [...new Set(orders.map(o=>getDayKey(o.timestamp)))].sort((a,b)=>new Date(b)-new Date(a));
+  const chartDay = selectedDay || availDays[0] || null;
 
   return (
     <div style={S.root}>
-
       {/* NAV */}
       <nav style={S.nav}>
         <div style={S.logoText}>LUNGO COFFEE</div>
         <div style={S.navTabs}>
           {[
-            { key: VIEWS.CUSTOMER, label: "Order" },
-            { key: VIEWS.BARISTA,  label: `Queue${pendingOrders.length ? ` (${pendingOrders.length})` : ""}` },
-            { key: VIEWS.RECORDS,  label: "Records" },
-          ].map(t => (
+            {key:VIEWS.CUSTOMER,label:"Order"},
+            {key:VIEWS.BARISTA, label:`Queue${pendingOrders.length?` (${pendingOrders.length})`:""}`},
+            {key:VIEWS.RECORDS, label:"Records"},
+          ].map(t=>(
             <button key={t.key}
-              onClick={() => { setView(t.key); setStage("menu"); setCart([]); }}
-              style={{ ...S.navTab, ...(view === t.key ? S.navTabActive : {}) }}>
+              onClick={()=>{setView(t.key);setStage("menu");setCart([]);}}
+              style={{...S.navTab,...(view===t.key?S.navTabActive:{})}}>
               {t.label}
             </button>
           ))}
@@ -253,170 +333,144 @@ export default function App() {
       </nav>
 
       {/* ══ CUSTOMER ══ */}
-      {view === VIEWS.CUSTOMER && (
+      {view===VIEWS.CUSTOMER && (
         <div style={S.wrap}>
-
-          {stage === "menu" && (
+          {stage==="menu" && (
             <>
-              <div style={{ textAlign: "center", marginBottom: "28px" }}>
+              <div style={{textAlign:"center",marginBottom:"28px"}}>
                 <div style={S.menuBanner}><span style={S.menuBannerText}>M E N U</span></div>
-                <p style={{ color: MUTED, fontSize: "12px", marginTop: "10px", letterSpacing: "1px" }}>
+                <p style={{color:MUTED,fontSize:"13px",marginTop:"10px",letterSpacing:"1px"}}>
                   Tap an item to add to your order
                 </p>
               </div>
-
               <div style={S.menuGrid}>
                 {MENU.map(item => {
-                  const inCart = cart.find(c => c.id === item.id);
+                  const inCart = cart.find(c=>c.id===item.id);
                   return (
-                    <button key={item.id} onClick={() => addItem(item)}
-                      style={{ ...S.menuCard, ...(inCart ? S.menuCardActive : {}) }}>
-                      <span style={{ fontSize: "13px", fontWeight: "600", letterSpacing: "0.5px" }}>{item.name}</span>
-                      <span style={{ fontSize: "19px", fontWeight: "bold" }}>RM {item.price.toFixed(2)}</span>
+                    <button key={item.id} onClick={()=>addItem(item)}
+                      style={{...S.menuCard,...(inCart?S.menuCardActive:{})}}>
+                      <span style={{fontSize:"15px",fontWeight:"600",letterSpacing:"0.5px"}}>{item.name}</span>
+                      <span style={{fontSize:"22px",fontWeight:"bold"}}>RM {item.price.toFixed(2)}</span>
                       {inCart && <span style={S.menuBadge}>×{inCart.qty}</span>}
                     </button>
                   );
                 })}
               </div>
-
-              {/* Others button */}
-              <button onClick={() => { setOtherName(""); setOtherPrice(""); setShowOthers(true); }} style={S.othersBtn}>
+              <button onClick={()=>{setOtherName("");setOtherPrice("");setShowOthers(true);}} style={S.othersBtn}>
                 + Others
               </button>
-
-              {/* Others modal */}
               {showOthers && (
-                <div style={S.modalOverlay} onClick={() => setShowOthers(false)}>
-                  <div style={S.modalBox} onClick={e => e.stopPropagation()}>
+                <div style={S.modalOverlay} onClick={()=>setShowOthers(false)}>
+                  <div style={S.modalBox} onClick={e=>e.stopPropagation()}>
                     <h3 style={S.modalTitle}>Add Custom Item</h3>
-                    <p style={{ color: MUTED, fontSize: "12px", marginBottom: "20px", letterSpacing: "0.5px" }}>
-                      Enter the item name and price
-                    </p>
-                    <input
-                      placeholder="Item name (e.g. Ice, Tips)"
-                      value={otherName}
-                      onChange={e => setOtherName(e.target.value)}
-                      style={S.modalInput}
-                    />
-                    <div style={{ position: "relative" }}>
+                    <p style={{color:MUTED,fontSize:"13px",marginBottom:"20px"}}>Enter the item name and price</p>
+                    <input placeholder="Item name (e.g. Ice, Tips)" value={otherName}
+                      onChange={e=>setOtherName(e.target.value)} style={S.modalInput}/>
+                    <div style={{position:"relative"}}>
                       <span style={S.rmPrefix}>RM</span>
-                      <input
-                        placeholder="0.00"
-                        value={otherPrice}
-                        onChange={e => setOtherPrice(e.target.value)}
-                        type="number"
-                        min="0"
-                        step="0.50"
-                        style={{ ...S.modalInput, paddingLeft: "44px" }}
-                      />
+                      <input placeholder="0.00" value={otherPrice} onChange={e=>setOtherPrice(e.target.value)}
+                        type="number" min="0" step="0.50"
+                        style={{...S.modalInput,paddingLeft:"44px"}}/>
                     </div>
-                    <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
-                      <button onClick={() => setShowOthers(false)} style={S.modalCancel}>Cancel</button>
-                      <button onClick={() => {
-                        const name = otherName.trim();
-                        const price = parseFloat(otherPrice);
-                        if (!name || isNaN(price) || price <= 0) return;
-                        const customItem = { id: `custom_${Date.now()}`, name, price };
-                        addItem(customItem);
+                    <div style={{display:"flex",gap:"10px",marginTop:"8px"}}>
+                      <button onClick={()=>setShowOthers(false)} style={S.modalCancel}>Cancel</button>
+                      <button onClick={()=>{
+                        const name=otherName.trim();
+                        const price=parseFloat(otherPrice);
+                        if (!name||isNaN(price)||price<=0) return;
+                        addItem({id:`custom_${Date.now()}`,name,price});
                         setShowOthers(false);
                       }} style={S.modalConfirm}>Add to Order</button>
                     </div>
                   </div>
                 </div>
               )}
-
-              {cart.length > 0 && (
+              {cart.length>0 && (
                 <div style={S.floatingCart}>
-                  <span style={{ fontWeight: 600, fontSize: "14px" }}>
-                    {itemCount} item{itemCount > 1 ? "s" : ""} · RM {total.toFixed(2)}
+                  <span style={{fontWeight:600,fontSize:"15px"}}>
+                    {itemCount} item{itemCount>1?"s":""} · RM {total.toFixed(2)}
                   </span>
-                  <button onClick={() => setStage("cart")} style={S.cartBtn}>View Order →</button>
+                  <button onClick={()=>setStage("cart")} style={S.cartBtn}>View Order →</button>
                 </div>
               )}
             </>
           )}
 
-          {stage === "cart" && (
+          {stage==="cart" && (
             <div style={S.panel}>
-              <button onClick={() => setStage("menu")} style={S.back}>← Back to Menu</button>
+              <button onClick={()=>setStage("menu")} style={S.back}>← Back to Menu</button>
               <h2 style={S.panelTitle}>Your Order</h2>
-              {cart.map(c => (
+              {cart.map(c=>(
                 <div key={c.id} style={S.cartRow}>
-                  <span style={{ flex: 1, fontSize: "15px", color: NAVY }}>{c.name}</span>
+                  <span style={{flex:1,fontSize:"16px",color:NAVY}}>{c.name}</span>
                   <div style={S.qtyControls}>
-                    <button onClick={() => removeItem(c.id)} style={S.qtyBtn}>−</button>
-                    <span style={{ fontWeight: "bold", minWidth: "20px", textAlign: "center" }}>{c.qty}</span>
-                    <button onClick={() => addItem(c)} style={S.qtyBtn}>+</button>
+                    <button onClick={()=>removeItem(c.id)} style={S.qtyBtn}>−</button>
+                    <span style={{fontWeight:"bold",minWidth:"24px",textAlign:"center",fontSize:"16px"}}>{c.qty}</span>
+                    <button onClick={()=>addItem(c)} style={S.qtyBtn}>+</button>
                   </div>
-                  <span style={{ color: NAVY, fontWeight: "bold", minWidth: "72px", textAlign: "right" }}>
-                    RM {(c.price * c.qty).toFixed(2)}
+                  <span style={{color:NAVY,fontWeight:"bold",minWidth:"80px",textAlign:"right",fontSize:"16px"}}>
+                    RM {(c.price*c.qty).toFixed(2)}
                   </span>
                 </div>
               ))}
-              <div style={{ height: "1px", background: `${NAVY}22`, margin: "16px 0" }} />
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "18px", marginBottom: "24px" }}>
-                <span style={{ fontWeight: 600 }}>Total</span>
-                <span style={{ color: NAVY, fontWeight: "bold", fontSize: "22px" }}>RM {total.toFixed(2)}</span>
+              <div style={{height:"1px",background:`${NAVY}22`,margin:"16px 0"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:"20px",marginBottom:"24px"}}>
+                <span style={{fontWeight:600}}>Total</span>
+                <span style={{color:NAVY,fontWeight:"bold",fontSize:"24px"}}>RM {total.toFixed(2)}</span>
               </div>
-              <button onClick={() => setStage("qr")} style={S.checkoutBtn}>Proceed to Payment</button>
+              <button onClick={()=>setStage("qr")} style={S.checkoutBtn}>Proceed to Payment</button>
             </div>
           )}
 
-          {stage === "qr" && (
+          {stage==="qr" && (
             <div style={S.panel}>
               <h2 style={S.panelTitle}>Scan to Pay</h2>
-              <p style={{ color: MUTED, fontSize: "13px", marginBottom: "20px" }}>DuitNow · Touch 'n Go · Online Banking</p>
+              <p style={{color:MUTED,fontSize:"14px",marginBottom:"20px"}}>DuitNow · Touch 'n Go · Online Banking</p>
               <div style={S.qrBox}>
-                <img src={IMG_QR} alt="Payment QR" style={{ width: "100%", maxWidth: "260px", borderRadius: "6px" }} />
-                <div style={{ fontSize: "28px", fontWeight: "bold", color: NAVY, marginTop: "16px" }}>RM {total.toFixed(2)}</div>
-                <div style={{ fontSize: "12px", color: MUTED, marginTop: "4px", letterSpacing: "2px" }}>LUNGO COFFEE</div>
+                <img src={IMG_QR} alt="Payment QR" style={{width:"100%",maxWidth:"280px",borderRadius:"6px"}}/>
+                <div style={{fontSize:"32px",fontWeight:"bold",color:NAVY,marginTop:"16px"}}>RM {total.toFixed(2)}</div>
+                <div style={{fontSize:"13px",color:MUTED,marginTop:"4px",letterSpacing:"2px"}}>LUNGO COFFEE</div>
               </div>
-              <p style={{ color: MUTED, fontSize: "13px", textAlign: "center", marginBottom: "20px" }}>
-                Show this screen to staff after paying
-              </p>
+              <p style={{color:MUTED,fontSize:"13px",textAlign:"center",marginBottom:"20px"}}>Show this screen to staff after paying</p>
               <button onClick={handlePaymentReceived} style={S.paidBtn}>✓ Payment Received (Staff only)</button>
             </div>
           )}
 
-          {stage === "thankyou" && (
-            <div style={{ ...S.panel, textAlign: "center", padding: "60px 24px" }}>
-              <div style={{ fontSize: "56px", marginBottom: "20px" }}>☕</div>
-              <h2 style={{ fontSize: "28px", fontWeight: "bold", color: NAVY, marginBottom: "12px", letterSpacing: "1px" }}>
-                Thank You!
-              </h2>
-              <p style={{ color: MUTED, lineHeight: "1.8", fontSize: "15px" }}>
+          {stage==="thankyou" && (
+            <div style={{...S.panel,textAlign:"center",padding:"64px 24px"}}>
+              <div style={{fontSize:"72px",marginBottom:"20px"}}>☕</div>
+              <h2 style={{fontSize:"32px",fontWeight:"bold",color:NAVY,marginBottom:"12px",letterSpacing:"1px"}}>Thank You!</h2>
+              <p style={{color:MUTED,lineHeight:"1.8",fontSize:"17px"}}>
                 Your order is being prepared.<br/>We'll call you when it's ready!
               </p>
-              <p style={{ color: MUTED, fontSize: "11px", marginTop: "28px", letterSpacing: "3px" }}>LUNGO COFFEE</p>
+              <p style={{color:MUTED,fontSize:"12px",marginTop:"28px",letterSpacing:"3px"}}>LUNGO COFFEE</p>
             </div>
           )}
         </div>
       )}
 
-      {/* ══ BARISTA QUEUE ══ */}
-      {view === VIEWS.BARISTA && (
+      {/* ══ BARISTA ══ */}
+      {view===VIEWS.BARISTA && (
         <div style={S.wrap}>
           <h1 style={S.pageTitle}>Barista Queue</h1>
-          {pendingOrders.length === 0 ? (
+          {pendingOrders.length===0 ? (
             <div style={S.emptyState}>✅ No pending orders</div>
           ) : (
             <div style={S.orderList}>
-              {pendingOrders.map((o) => (
+              {pendingOrders.map(o=>(
                 <div key={o.id} style={S.orderCard}>
                   <div style={S.orderCardHeader}>
-                    <span style={{ fontWeight: "bold", fontSize: "15px", color: NAVY }}>
-                      Order #{orders.length - orders.indexOf(o)}
-                    </span>
-                    <span style={{ fontSize: "11px", color: MUTED, marginLeft: "auto" }}>{formatTime(o.timestamp)}</span>
+                    <span style={{fontWeight:"bold",fontSize:"16px",color:NAVY}}>Order #{orders.length-orders.indexOf(o)}</span>
+                    <span style={{fontSize:"12px",color:MUTED,marginLeft:"auto"}}>{formatTime(o.timestamp)}</span>
                   </div>
-                  {o.items.map((it, i) => (
+                  {o.items.map((it,i)=>(
                     <div key={i} style={S.orderItem}>
                       <span>× {it.qty}  {it.name}</span>
-                      <span>RM {(it.price * it.qty).toFixed(2)}</span>
+                      <span>RM {(it.price*it.qty).toFixed(2)}</span>
                     </div>
                   ))}
                   <div style={S.orderTotal}>Total: RM {o.total.toFixed(2)}</div>
-                  <button onClick={() => markDone(o.id)} style={S.doneBtn}>✓ Mark as Done</button>
+                  <button onClick={()=>markDone(o.id)} style={S.doneBtn}>✓ Mark as Done</button>
                 </div>
               ))}
             </div>
@@ -425,44 +479,79 @@ export default function App() {
       )}
 
       {/* ══ RECORDS ══ */}
-      {view === VIEWS.RECORDS && (
+      {view===VIEWS.RECORDS && (
         <div style={S.wrap}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "22px" }}>
-            <h1 style={{ ...S.pageTitle, marginBottom: 0 }}>Records</h1>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => exportToCSV(orders)} style={S.exportBtn}>↓ Export CSV</button>
-              <button onClick={() => { if (window.confirm("Clear all records? This cannot be undone.")) { saveOrders([]); } }} style={S.clearBtn}>✕ Clear</button>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"22px"}}>
+            <h1 style={{...S.pageTitle,marginBottom:0}}>Records</h1>
+            <div style={{display:"flex",gap:"8px"}}>
+              <button onClick={()=>exportToCSV(orders)} style={S.exportBtn}>↓ Export CSV</button>
+              <button onClick={()=>{if(window.confirm("Clear all records? This cannot be undone.")){saveOrders([]);}}} style={S.clearBtn}>✕ Clear</button>
             </div>
           </div>
+
+          {/* Summary cards */}
           <div style={S.summaryBar}>
             {[
-              { num: orders.length,                                            label: "Orders" },
-              { num: `RM ${orders.reduce((s,o)=>s+o.total,0).toFixed(2)}`, label: "Revenue" },
-              { num: doneOrders.length,                                        label: "Completed" },
-            ].map((c,i) => (
+              {num:orders.length, label:"Orders"},
+              {num:`RM ${orders.reduce((s,o)=>s+o.total,0).toFixed(2)}`, label:"Revenue"},
+              {num:doneOrders.length, label:"Completed"},
+            ].map((c,i)=>(
               <div key={i} style={S.summaryCard}>
-                <div style={{ fontSize: "18px", fontWeight: "bold", color: NAVY }}>{c.num}</div>
-                <div style={{ fontSize: "10px", color: MUTED, marginTop: "4px", letterSpacing: "1px", textTransform: "uppercase" }}>{c.label}</div>
+                <div style={{fontSize:"20px",fontWeight:"bold",color:NAVY}}>{c.num}</div>
+                <div style={{fontSize:"11px",color:MUTED,marginTop:"4px",letterSpacing:"1px",textTransform:"uppercase"}}>{c.label}</div>
               </div>
             ))}
           </div>
-          {orders.length === 0 ? (
+
+          {orders.length>0 && (
+            <>
+              {/* Day selector */}
+              <div style={{marginBottom:"16px"}}>
+                <label style={{fontSize:"12px",color:MUTED,letterSpacing:"1px",textTransform:"uppercase",display:"block",marginBottom:"6px"}}>
+                  View charts for:
+                </label>
+                <select value={chartDay||""} onChange={e=>setSelectedDay(e.target.value)}
+                  style={{width:"100%",padding:"10px 12px",border:`1px solid ${NAVY}30`,borderRadius:"6px",
+                    fontSize:"14px",fontFamily:"inherit",color:NAVY,background:WHITE,outline:"none"}}>
+                  {availDays.map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              {chartDay && (
+                <>
+                  {/* Bar chart */}
+                  <div style={S.chartCard}>
+                    <h3 style={S.chartTitle}>Drinks Sold — {chartDay}</h3>
+                    <BarChart orders={orders} dayKey={chartDay}/>
+                  </div>
+                  {/* Line chart */}
+                  <div style={S.chartCard}>
+                    <h3 style={S.chartTitle}>Revenue by Time — {chartDay}</h3>
+                    <LineChart orders={orders} dayKey={chartDay}/>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* Order list */}
+          {orders.length===0 ? (
             <div style={S.emptyState}>No records yet.</div>
           ) : (
             <div style={S.orderList}>
-              {orders.map((o, idx) => (
-                <div key={o.id} style={{ ...S.orderCard, opacity: o.status === "done" ? 0.7 : 1 }}>
+              {orders.map((o,idx)=>(
+                <div key={o.id} style={{...S.orderCard,opacity:o.status==="done"?0.7:1}}>
                   <div style={S.orderCardHeader}>
-                    <span style={{ fontWeight: "bold", fontSize: "14px", color: NAVY }}>Order #{orders.length - idx}</span>
-                    <span style={{ ...S.statusBadge, background: o.status === "done" ? "#2d6a4f" : NAVY }}>
-                      {o.status === "done" ? "✓ Done" : "⏳ Pending"}
+                    <span style={{fontWeight:"bold",fontSize:"15px",color:NAVY}}>Order #{orders.length-idx}</span>
+                    <span style={{...S.statusBadge,background:o.status==="done"?"#2d6a4f":NAVY}}>
+                      {o.status==="done"?"✓ Done":"⏳ Pending"}
                     </span>
-                    <span style={{ fontSize: "11px", color: MUTED, marginLeft: "auto" }}>{formatTime(o.timestamp)}</span>
+                    <span style={{fontSize:"12px",color:MUTED,marginLeft:"auto"}}>{formatTime(o.timestamp)}</span>
                   </div>
-                  {o.items.map((it, i) => (
+                  {o.items.map((it,i)=>(
                     <div key={i} style={S.orderItem}>
                       <span>× {it.qty}  {it.name}</span>
-                      <span>RM {(it.price * it.qty).toFixed(2)}</span>
+                      <span>RM {(it.price*it.qty).toFixed(2)}</span>
                     </div>
                   ))}
                   <div style={S.orderTotal}>Total: RM {o.total.toFixed(2)}</div>
@@ -477,60 +566,120 @@ export default function App() {
 }
 
 const S = {
-  root: { minHeight: "100vh", background: BG, color: NAVY, fontFamily: "'Futura', 'Century Gothic', 'Trebuchet MS', sans-serif", display: "flex", flexDirection: "column" },
+  root:{ minHeight:"100vh", background:BG, color:NAVY,
+    fontFamily:"'Futura','Century Gothic','Trebuchet MS',sans-serif",
+    display:"flex", flexDirection:"column" },
 
-  nav: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: NAVY, position: "sticky", top: 0, zIndex: 100 },
-  logoText: { fontSize: "16px", fontWeight: "bold", color: WHITE, letterSpacing: "3px" },
-  navTabs: { display: "flex", gap: "6px" },
-  navTab: { padding: "7px 14px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.3)", background: "transparent", color: "rgba(255,255,255,0.65)", cursor: "pointer", fontSize: "11px", fontFamily: "inherit", letterSpacing: "1.5px", textTransform: "uppercase" },
-  navTabActive: { background: WHITE, color: NAVY, border: `1px solid ${WHITE}`, fontWeight: "bold" },
+  nav:{ display:"flex", alignItems:"center", justifyContent:"space-between",
+    padding:"16px 24px", background:NAVY, position:"sticky", top:0, zIndex:100 },
+  logoText:{ fontSize:"18px", fontWeight:"bold", color:WHITE, letterSpacing:"3px" },
+  navTabs:{ display:"flex", gap:"8px" },
+  navTab:{ padding:"10px 18px", borderRadius:"6px",
+    border:"1px solid rgba(255,255,255,0.3)", background:"transparent",
+    color:"rgba(255,255,255,0.65)", cursor:"pointer", fontSize:"13px",
+    fontFamily:"inherit", letterSpacing:"1px", textTransform:"uppercase" },
+  navTabActive:{ background:WHITE, color:NAVY, border:`1px solid ${WHITE}`, fontWeight:"bold" },
 
-  wrap: { flex: 1, maxWidth: "480px", margin: "0 auto", padding: "28px 20px 110px", width: "100%" },
-  pageTitle: { fontSize: "22px", fontWeight: "bold", color: NAVY, marginBottom: "20px", letterSpacing: "2px", textTransform: "uppercase" },
+  wrap:{ flex:1, maxWidth:"600px", margin:"0 auto", padding:"32px 24px 120px", width:"100%" },
+  pageTitle:{ fontSize:"24px", fontWeight:"bold", color:NAVY, marginBottom:"20px",
+    letterSpacing:"2px", textTransform:"uppercase" },
 
-  menuBanner: { background: NAVY, display: "inline-block", padding: "10px 36px", borderRadius: "4px" },
-  menuBannerText: { color: WHITE, fontSize: "13px", letterSpacing: "8px", fontWeight: "bold" },
+  menuBanner:{ background:NAVY, display:"inline-block", padding:"12px 40px", borderRadius:"4px" },
+  menuBannerText:{ color:WHITE, fontSize:"14px", letterSpacing:"8px", fontWeight:"bold" },
 
-  menuGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" },
-  menuCard: { position: "relative", padding: "24px 16px 20px", borderRadius: "6px", border: `2px solid ${NAVY}`, background: WHITE, cursor: "pointer", textAlign: "center", display: "flex", flexDirection: "column", gap: "10px", transition: "background .1s, color .1s", fontFamily: "inherit", color: NAVY },
-  menuCardActive: { background: NAVY, color: WHITE },
-  menuBadge: { position: "absolute", top: "8px", right: "8px", background: BG, color: NAVY, borderRadius: "999px", padding: "2px 7px", fontSize: "11px", fontWeight: "bold" },
+  menuGrid:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px", marginBottom:"20px" },
+  menuCard:{ position:"relative", padding:"28px 20px 22px", borderRadius:"8px",
+    border:`2px solid ${NAVY}`, background:WHITE, cursor:"pointer",
+    textAlign:"center", display:"flex", flexDirection:"column", gap:"12px",
+    transition:"background .1s,color .1s", fontFamily:"inherit", color:NAVY },
+  menuCardActive:{ background:NAVY, color:WHITE },
+  menuBadge:{ position:"absolute", top:"10px", right:"10px", background:BG, color:NAVY,
+    borderRadius:"999px", padding:"3px 9px", fontSize:"13px", fontWeight:"bold" },
 
-  floatingCart: { position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)", background: NAVY, color: WHITE, padding: "14px 22px", borderRadius: "6px", display: "flex", alignItems: "center", gap: "16px", boxShadow: `0 8px 32px ${NAVY}55`, zIndex: 50, whiteSpace: "nowrap" },
-  cartBtn: { background: WHITE, color: NAVY, border: "none", borderRadius: "4px", padding: "8px 18px", cursor: "pointer", fontWeight: "bold", fontSize: "12px", fontFamily: "inherit", letterSpacing: "1px" },
+  floatingCart:{ position:"fixed", bottom:"28px", left:"50%", transform:"translateX(-50%)",
+    background:NAVY, color:WHITE, padding:"16px 28px", borderRadius:"8px",
+    display:"flex", alignItems:"center", gap:"18px",
+    boxShadow:`0 8px 32px ${NAVY}55`, zIndex:50, whiteSpace:"nowrap" },
+  cartBtn:{ background:WHITE, color:NAVY, border:"none", borderRadius:"6px",
+    padding:"10px 22px", cursor:"pointer", fontWeight:"bold",
+    fontSize:"14px", fontFamily:"inherit", letterSpacing:"1px" },
 
-  panel: { background: WHITE, borderRadius: "6px", padding: "28px 24px", border: `1px solid ${NAVY}1a` },
-  panelTitle: { fontSize: "18px", fontWeight: "bold", color: NAVY, marginBottom: "20px", letterSpacing: "1.5px", textTransform: "uppercase" },
-  back: { background: "none", border: "none", color: MUTED, cursor: "pointer", marginBottom: "16px", padding: 0, fontSize: "14px", fontFamily: "inherit" },
-  cartRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${NAVY}14` },
-  qtyControls: { display: "flex", alignItems: "center", gap: "10px", margin: "0 12px" },
-  qtyBtn: { width: "28px", height: "28px", borderRadius: "4px", border: `1px solid ${NAVY}40`, background: BG, color: NAVY, cursor: "pointer", fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" },
-  checkoutBtn: { width: "100%", padding: "16px", background: NAVY, color: WHITE, border: "none", borderRadius: "6px", fontSize: "14px", fontWeight: "bold", cursor: "pointer", fontFamily: "inherit", letterSpacing: "2px", textTransform: "uppercase" },
+  panel:{ background:WHITE, borderRadius:"8px", padding:"32px 28px",
+    border:`1px solid ${NAVY}1a` },
+  panelTitle:{ fontSize:"20px", fontWeight:"bold", color:NAVY,
+    marginBottom:"22px", letterSpacing:"1.5px", textTransform:"uppercase" },
+  back:{ background:"none", border:"none", color:MUTED, cursor:"pointer",
+    marginBottom:"18px", padding:0, fontSize:"15px", fontFamily:"inherit" },
+  cartRow:{ display:"flex", alignItems:"center", justifyContent:"space-between",
+    padding:"14px 0", borderBottom:`1px solid ${NAVY}14` },
+  qtyControls:{ display:"flex", alignItems:"center", gap:"12px", margin:"0 16px" },
+  qtyBtn:{ width:"34px", height:"34px", borderRadius:"6px",
+    border:`1px solid ${NAVY}40`, background:BG, color:NAVY,
+    cursor:"pointer", fontSize:"18px", display:"flex",
+    alignItems:"center", justifyContent:"center", fontFamily:"inherit" },
+  checkoutBtn:{ width:"100%", padding:"18px", background:NAVY, color:WHITE,
+    border:"none", borderRadius:"8px", fontSize:"16px", fontWeight:"bold",
+    cursor:"pointer", fontFamily:"inherit", letterSpacing:"2px", textTransform:"uppercase" },
 
-  qrBox: { background: BG, border: `1px solid ${NAVY}18`, borderRadius: "6px", padding: "24px 16px", textAlign: "center", margin: "0 0 20px", display: "flex", flexDirection: "column", alignItems: "center" },
-  paidBtn: { width: "100%", padding: "14px", background: "#2d6a4f", color: "white", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: "bold", cursor: "pointer", fontFamily: "inherit", letterSpacing: "1px" },
+  qrBox:{ background:BG, border:`1px solid ${NAVY}18`, borderRadius:"8px",
+    padding:"28px 20px", textAlign:"center", margin:"0 0 20px",
+    display:"flex", flexDirection:"column", alignItems:"center" },
+  paidBtn:{ width:"100%", padding:"16px", background:"#2d6a4f", color:"white",
+    border:"none", borderRadius:"8px", fontSize:"15px", fontWeight:"bold",
+    cursor:"pointer", fontFamily:"inherit", letterSpacing:"1px" },
 
-  orderList: { display: "flex", flexDirection: "column", gap: "12px" },
-  orderCard: { background: WHITE, borderRadius: "6px", padding: "18px 20px", border: `1px solid ${NAVY}20` },
-  orderCardHeader: { display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" },
-  orderItem: { display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: "13px", color: MUTED },
-  orderTotal: { fontWeight: "bold", color: NAVY, marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${NAVY}14` },
-  doneBtn: { marginTop: "12px", width: "100%", padding: "11px", background: "#2d6a4f", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "13px", fontFamily: "inherit", letterSpacing: "0.5px" },
+  orderList:{ display:"flex", flexDirection:"column", gap:"14px" },
+  orderCard:{ background:WHITE, borderRadius:"8px", padding:"20px 22px",
+    border:`1px solid ${NAVY}20` },
+  orderCardHeader:{ display:"flex", alignItems:"center", gap:"10px",
+    marginBottom:"12px", flexWrap:"wrap" },
+  orderItem:{ display:"flex", justifyContent:"space-between",
+    padding:"6px 0", fontSize:"14px", color:MUTED },
+  orderTotal:{ fontWeight:"bold", color:NAVY, marginTop:"10px",
+    paddingTop:"10px", borderTop:`1px solid ${NAVY}14`, fontSize:"15px" },
+  doneBtn:{ marginTop:"12px", width:"100%", padding:"13px",
+    background:"#2d6a4f", color:"white", border:"none", borderRadius:"8px",
+    cursor:"pointer", fontWeight:"bold", fontSize:"14px", fontFamily:"inherit" },
 
-  emptyState: { textAlign: "center", color: MUTED, padding: "60px 20px", fontSize: "15px" },
-  summaryBar: { display: "flex", gap: "10px", marginBottom: "20px" },
-  summaryCard: { flex: 1, background: WHITE, borderRadius: "6px", padding: "16px 10px", textAlign: "center", border: `1px solid ${NAVY}20` },
-  statusBadge: { borderRadius: "4px", padding: "3px 8px", fontSize: "10px", fontWeight: "bold", color: "white", letterSpacing: "1px", textTransform: "uppercase" },
-  exportBtn: { padding: "8px 14px", background: NAVY, color: WHITE, border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold", fontSize: "11px", fontFamily: "inherit", letterSpacing: "1px", textTransform: "uppercase" },
-  clearBtn: { padding: "8px 14px", background: "transparent", color: "#b94040", border: "1px solid #b94040", borderRadius: "4px", cursor: "pointer", fontWeight: "bold", fontSize: "11px", fontFamily: "inherit", letterSpacing: "1px", textTransform: "uppercase" },
+  emptyState:{ textAlign:"center", color:MUTED, padding:"60px 20px", fontSize:"16px" },
+  summaryBar:{ display:"flex", gap:"12px", marginBottom:"22px" },
+  summaryCard:{ flex:1, background:WHITE, borderRadius:"8px", padding:"18px 10px",
+    textAlign:"center", border:`1px solid ${NAVY}20` },
+  statusBadge:{ borderRadius:"4px", padding:"3px 9px", fontSize:"11px",
+    fontWeight:"bold", color:"white", letterSpacing:"1px", textTransform:"uppercase" },
+  exportBtn:{ padding:"10px 16px", background:NAVY, color:WHITE, border:"none",
+    borderRadius:"6px", cursor:"pointer", fontWeight:"bold",
+    fontSize:"12px", fontFamily:"inherit", letterSpacing:"1px", textTransform:"uppercase" },
+  clearBtn:{ padding:"10px 16px", background:"transparent", color:"#b94040",
+    border:"1px solid #b94040", borderRadius:"6px", cursor:"pointer",
+    fontWeight:"bold", fontSize:"12px", fontFamily:"inherit",
+    letterSpacing:"1px", textTransform:"uppercase" },
 
-  othersBtn: { width: "100%", padding: "16px", background: "transparent", color: NAVY, border: `2px dashed ${NAVY}60`, borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "13px", fontFamily: "inherit", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "20px" },
+  othersBtn:{ width:"100%", padding:"18px", background:"transparent", color:NAVY,
+    border:`2px dashed ${NAVY}60`, borderRadius:"8px", cursor:"pointer",
+    fontWeight:"bold", fontSize:"14px", fontFamily:"inherit",
+    letterSpacing:"2px", textTransform:"uppercase", marginBottom:"20px" },
 
-  modalOverlay: { position: "fixed", inset: 0, background: "rgba(33,31,96,0.35)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" },
-  modalBox: { background: WHITE, borderRadius: "10px", padding: "28px 24px", width: "100%", maxWidth: "360px", boxShadow: "0 16px 48px rgba(33,31,96,0.2)" },
-  modalTitle: { fontSize: "18px", fontWeight: "bold", color: NAVY, marginBottom: "6px", letterSpacing: "1px", textTransform: "uppercase" },
-  modalInput: { width: "100%", padding: "12px 14px", border: `1px solid ${NAVY}30`, borderRadius: "6px", fontSize: "15px", fontFamily: "inherit", color: NAVY, background: BG, marginBottom: "12px", boxSizing: "border-box", outline: "none" },
-  rmPrefix: { position: "absolute", left: "14px", top: "50%", transform: "translateY(-62%)", color: MUTED, fontSize: "14px", fontWeight: "bold", pointerEvents: "none" },
-  modalCancel: { flex: 1, padding: "13px", background: "transparent", color: MUTED, border: `1px solid ${NAVY}25`, borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "13px", fontFamily: "inherit" },
-  modalConfirm: { flex: 1, padding: "13px", background: NAVY, color: WHITE, border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "13px", fontFamily: "inherit", letterSpacing: "0.5px" },
+  modalOverlay:{ position:"fixed", inset:0, background:"rgba(33,31,96,0.35)",
+    zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px" },
+  modalBox:{ background:WHITE, borderRadius:"12px", padding:"32px 28px",
+    width:"100%", maxWidth:"400px", boxShadow:"0 16px 48px rgba(33,31,96,0.2)" },
+  modalTitle:{ fontSize:"20px", fontWeight:"bold", color:NAVY, marginBottom:"6px",
+    letterSpacing:"1px", textTransform:"uppercase" },
+  modalInput:{ width:"100%", padding:"14px 16px", border:`1px solid ${NAVY}30`,
+    borderRadius:"8px", fontSize:"16px", fontFamily:"inherit", color:NAVY,
+    background:BG, marginBottom:"14px", boxSizing:"border-box", outline:"none" },
+  rmPrefix:{ position:"absolute", left:"16px", top:"50%", transform:"translateY(-62%)",
+    color:MUTED, fontSize:"15px", fontWeight:"bold", pointerEvents:"none" },
+  modalCancel:{ flex:1, padding:"14px", background:"transparent", color:MUTED,
+    border:`1px solid ${NAVY}25`, borderRadius:"8px", cursor:"pointer",
+    fontWeight:"bold", fontSize:"14px", fontFamily:"inherit" },
+  modalConfirm:{ flex:1, padding:"14px", background:NAVY, color:WHITE, border:"none",
+    borderRadius:"8px", cursor:"pointer", fontWeight:"bold",
+    fontSize:"14px", fontFamily:"inherit", letterSpacing:"0.5px" },
+
+  chartCard:{ background:WHITE, borderRadius:"8px", padding:"20px 18px",
+    border:`1px solid ${NAVY}18`, marginBottom:"16px", overflowX:"hidden" },
+  chartTitle:{ fontSize:"13px", fontWeight:"bold", color:NAVY,
+    letterSpacing:"1px", textTransform:"uppercase", marginBottom:"16px" },
 };
