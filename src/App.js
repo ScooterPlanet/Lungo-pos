@@ -307,7 +307,6 @@ export default function App() {
   const markDone = id => saveOrders(prev=>prev.map(o=>o.id===id?{...o,status:"done"}:o));
 
   const pendingOrders = orders.filter(o=>o.status==="pending");
-  const doneOrders    = orders.filter(o=>o.status==="done");
 
   // Available days for chart selector
   const availDays = [...new Set(orders.map(o=>getDayKey(o.timestamp)))].sort((a,b)=>new Date(b)-new Date(a));
