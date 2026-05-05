@@ -523,7 +523,6 @@ export default function App() {
                   .slice()
                   .sort((a,b) => a.timestamp - b.timestamp); // oldest first = order #1 first
                 const dayRevenue = dayOrders.reduce((s,o)=>s+o.total,0);
-                const dayDone = dayOrders.filter(o=>o.status==="done").length;
 
                 return (
                   <>
