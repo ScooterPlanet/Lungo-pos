@@ -491,7 +491,9 @@ export default function App() {
       {/* ══ RECORDS ══ */}
       {view===VIEWS.RECORDS && (
         <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "600px"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"22px"}}>
+
+          {/* Header */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"20px"}}>
             <h1 style={{...S.pageTitle,marginBottom:0}}>Records</h1>
             <div style={{display:"flex",gap:"8px"}}>
               <button onClick={()=>exportToCSV(orders)} style={S.exportBtn}>↓ Export CSV</button>
@@ -499,75 +501,92 @@ export default function App() {
             </div>
           </div>
 
-          {/* Summary cards */}
-          <div style={S.summaryBar}>
-            {[
-              {num:orders.length, label:"Orders"},
-              {num:`RM ${orders.reduce((s,o)=>s+o.total,0).toFixed(2)}`, label:"Revenue"},
-              {num:doneOrders.length, label:"Completed"},
-            ].map((c,i)=>(
-              <div key={i} style={S.summaryCard}>
-                <div style={{fontSize:"20px",fontWeight:"bold",color:NAVY}}>{c.num}</div>
-                <div style={{fontSize:"11px",color:MUTED,marginTop:"4px",letterSpacing:"1px",textTransform:"uppercase"}}>{c.label}</div>
-              </div>
-            ))}
-          </div>
-
-          {orders.length>0 && (
+          {orders.length===0 ? (
+            <div style={S.emptyState}>No records yet.</div>
+          ) : (
             <>
-              {/* Day selector */}
-              <div style={{marginBottom:"16px"}}>
+              {/* ── Day selector — controls EVERYTHING below ── */}
+              <div style={{marginBottom:"20px"}}>
                 <label style={{fontSize:"12px",color:MUTED,letterSpacing:"1px",textTransform:"uppercase",display:"block",marginBottom:"6px"}}>
-                  View charts for:
+                  Viewing date:
                 </label>
                 <select value={chartDay||""} onChange={e=>setSelectedDay(e.target.value)}
-                  style={{width:"100%",padding:"10px 12px",border:`1px solid ${NAVY}30`,borderRadius:"6px",
-                    fontSize:"14px",fontFamily:"inherit",color:NAVY,background:WHITE,outline:"none"}}>
+                  style={{width:"100%",padding:"12px 14px",border:`2px solid ${NAVY}`,borderRadius:"6px",
+                    fontSize:"15px",fontFamily:"inherit",color:NAVY,background:WHITE,outline:"none",fontWeight:"600"}}>
                   {availDays.map(d=><option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
 
-              {chartDay && (
-                <>
-                  {/* Bar chart */}
-                  <div style={S.chartCard}>
-                    <h3 style={S.chartTitle}>Drinks Sold — {chartDay}</h3>
-                    <BarChart orders={orders} dayKey={chartDay}/>
-                  </div>
-                  {/* Line chart */}
-                  <div style={S.chartCard}>
-                    <h3 style={S.chartTitle}>Revenue by Time — {chartDay}</h3>
-                    <LineChart orders={orders} dayKey={chartDay}/>
-                  </div>
-                </>
-              )}
-            </>
-          )}
+              {chartDay && (() => {
+                // All data scoped to selected day
+                const dayOrders = orders
+                  .filter(o => getDayKey(o.timestamp) === chartDay)
+                  .slice()
+                  .sort((a,b) => a.timestamp - b.timestamp); // oldest first = order #1 first
+                const dayRevenue = dayOrders.reduce((s,o)=>s+o.total,0);
+                const dayDone = dayOrders.filter(o=>o.status==="done").length;
 
-          {/* Order list */}
-          {orders.length===0 ? (
-            <div style={S.emptyState}>No records yet.</div>
-          ) : (
-            <div style={S.orderList}>
-              {orders.map((o,idx)=>(
-                <div key={o.id} style={{...S.orderCard,opacity:o.status==="done"?0.7:1}}>
-                  <div style={S.orderCardHeader}>
-                    <span style={{fontWeight:"bold",fontSize:"15px",color:NAVY}}>Order #{orders.length-idx}</span>
-                    <span style={{...S.statusBadge,background:o.status==="done"?"#2d6a4f":NAVY}}>
-                      {o.status==="done"?"✓ Done":"⏳ Pending"}
-                    </span>
-                    <span style={{fontSize:"12px",color:MUTED,marginLeft:"auto"}}>{formatTime(o.timestamp)}</span>
-                  </div>
-                  {o.items.map((it,i)=>(
-                    <div key={i} style={S.orderItem}>
-                      <span>× {it.qty}  {it.name}</span>
-                      <span>RM {(it.price*it.qty).toFixed(2)}</span>
+                return (
+                  <>
+                    {/* Summary cards — scoped to day */}
+                    <div style={S.summaryBar}>
+                      {[
+                        {num: dayOrders.length,              label:"Orders Today"},
+                        {num: `RM ${dayRevenue.toFixed(2)}`, label:"Revenue Today"},
+                        {num: dayOrders.reduce((s,o)=>s+o.items.reduce((ss,it)=>ss+it.qty,0),0), label:"Drinks Sold"},
+                      ].map((c,i)=>(
+                        <div key={i} style={S.summaryCard}>
+                          <div style={{fontSize:"18px",fontWeight:"bold",color:NAVY}}>{c.num}</div>
+                          <div style={{fontSize:"10px",color:MUTED,marginTop:"4px",letterSpacing:"1px",textTransform:"uppercase"}}>{c.label}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                  <div style={S.orderTotal}>Total: RM {o.total.toFixed(2)}</div>
-                </div>
-              ))}
-            </div>
+
+                    {/* Bar chart */}
+                    <div style={S.chartCard}>
+                      <h3 style={S.chartTitle}>Drinks Sold — {chartDay}</h3>
+                      <BarChart orders={orders} dayKey={chartDay}/>
+                    </div>
+
+                    {/* Line chart */}
+                    <div style={S.chartCard}>
+                      <h3 style={S.chartTitle}>Revenue by Time — {chartDay}</h3>
+                      <LineChart orders={orders} dayKey={chartDay}/>
+                    </div>
+
+                    {/* Order list — per-day numbering starting at 1, revenue starting at 0 */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px",marginTop:"8px"}}>
+                      <span style={{fontSize:"13px",color:MUTED}}>
+                        {dayOrders.length} order{dayOrders.length!==1?"s":""} · RM {dayRevenue.toFixed(2)} total
+                      </span>
+                    </div>
+                    <div style={S.orderList}>
+                      {dayOrders.map((o, idx)=>{
+                        const orderNum = idx + 1; // resets to 1 each day
+                        return (
+                          <div key={o.id} style={{...S.orderCard,opacity:o.status==="done"?0.7:1}}>
+                            <div style={S.orderCardHeader}>
+                              <span style={{fontWeight:"bold",fontSize:"15px",color:NAVY}}>Order #{orderNum}</span>
+                              <span style={{...S.statusBadge,background:o.status==="done"?"#2d6a4f":NAVY}}>
+                                {o.status==="done"?"✓ Done":"⏳ Pending"}
+                              </span>
+                              <span style={{fontSize:"12px",color:MUTED,marginLeft:"auto"}}>{formatTime(o.timestamp)}</span>
+                            </div>
+                            {o.items.map((it,i)=>(
+                              <div key={i} style={S.orderItem}>
+                                <span>× {it.qty}  {it.name}</span>
+                                <span>RM {(it.price*it.qty).toFixed(2)}</span>
+                              </div>
+                            ))}
+                            <div style={S.orderTotal}>Total: RM {o.total.toFixed(2)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+            </>
           )}
         </div>
       )}
