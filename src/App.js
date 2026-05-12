@@ -298,13 +298,24 @@ export default function App() {
     const newOrder = {
       id:Date.now(),
       items:cart.map(c=>({name:c.name,qty:c.qty,price:c.price})),
-      total, timestamp:Date.now(), status:"pending",
+      total, timestamp:Date.now(), status:"pending", paid:true,
+    };
+    saveOrders(prev=>[newOrder,...prev]);
+    setStage("thankyou");
+    setTimeout(()=>{setCart([]);setStage("menu");},3500);
+  };
+  const handlePayLater = () => {
+    const newOrder = {
+      id:Date.now(),
+      items:cart.map(c=>({name:c.name,qty:c.qty,price:c.price})),
+      total, timestamp:Date.now(), status:"pending", paid:false,
     };
     saveOrders(prev=>[newOrder,...prev]);
     setStage("thankyou");
     setTimeout(()=>{setCart([]);setStage("menu");},3500);
   };
   const markDone = id => saveOrders(prev=>prev.map(o=>o.id===id?{...o,status:"done"}:o));
+  const markPaid = id => saveOrders(prev=>prev.map(o=>o.id===id?{...o,paid:true}:o));
 
   const pendingOrders = orders.filter(o=>o.status==="pending");
 
@@ -315,9 +326,9 @@ export default function App() {
   return (
     <div style={S.root}>
       {/* NAV */}
-      <nav style={S.nav}>
-        <div style={S.logoText}>LUNGO COFFEE</div>
-        <div style={{display:"flex", alignItems:"center", gap:"8px"}}>
+      <nav style={{...S.nav, padding: isMobile ? "16px 24px" : "20px 40px"}}>
+        <div style={{...S.logoText, fontSize: isMobile ? "18px" : "24px"}}>LUNGO COFFEE</div>
+        <div style={{display:"flex", alignItems:"center", gap: isMobile ? "8px" : "16px"}}>
           <div style={S.navTabs}>
             {[
               {key:VIEWS.CUSTOMER,label:"Order"},
@@ -326,7 +337,10 @@ export default function App() {
             ].map(t=>(
               <button key={t.key}
                 onClick={()=>{setView(t.key);setStage("menu");setCart([]);}}
-                style={{...S.navTab,...(view===t.key?S.navTabActive:{})}}>
+                style={{...S.navTab,...(view===t.key?S.navTabActive:{}),
+                  height: isMobile ? "36px" : "52px",
+                  padding: isMobile ? "0 18px" : "0 32px",
+                  fontSize: isMobile ? "13px" : "16px"}}>
                 {t.label}
               </button>
             ))}
@@ -335,7 +349,7 @@ export default function App() {
           <button
             onClick={()=>setIsMobile(m=>!m)}
             title={isMobile ? "Switch to Tablet" : "Switch to Mobile"}
-            style={S.toggleBtn}>
+            style={{...S.toggleBtn, height: isMobile ? "36px" : "52px", width: isMobile ? "36px" : "52px", fontSize: isMobile ? "15px" : "22px"}}>
             {isMobile ? "🍎" : "📱"}
           </button>
         </div>
@@ -343,7 +357,7 @@ export default function App() {
 
       {/* ══ CUSTOMER ══ */}
       {view===VIEWS.CUSTOMER && (
-        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "600px"}}>
+        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "40px 48px 140px"}}>
           {stage==="menu" && (
             <>
               <div style={{textAlign:"center",marginBottom:"28px"}}>
@@ -352,20 +366,21 @@ export default function App() {
                   Tap an item to add to your order
                 </p>
               </div>
-              <div style={{...S.menuGrid, gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr"}}>
+              <div style={{...S.menuGrid, gridTemplateColumns: "1fr 1fr", gap: isMobile ? "16px" : "24px"}}>
                 {MENU.map(item => {
                   const inCart = cart.find(c=>c.id===item.id);
                   return (
                     <button key={item.id} onClick={()=>addItem(item)}
-                      style={{...S.menuCard,...(inCart?S.menuCardActive:{}), padding: isMobile ? "18px 14px 14px" : "28px 20px 22px"}}>
-                      <span style={{fontSize:"15px",fontWeight:"600",letterSpacing:"0.5px"}}>{item.name}</span>
-                      <span style={{fontSize:"22px",fontWeight:"bold"}}>RM {item.price.toFixed(2)}</span>
+                      style={{...S.menuCard,...(inCart?S.menuCardActive:{}), padding: isMobile ? "18px 14px 14px" : "36px 28px 30px"}}>
+                      <span style={{fontSize: isMobile ? "15px" : "20px", fontWeight:"600",letterSpacing:"0.5px"}}>{item.name}</span>
+                      <span style={{fontSize: isMobile ? "22px" : "30px", fontWeight:"bold"}}>RM {item.price.toFixed(2)}</span>
                       {inCart && <span style={S.menuBadge}>×{inCart.qty}</span>}
                     </button>
                   );
                 })}
               </div>
-              <button onClick={()=>{setOtherName("");setOtherPrice("");setShowOthers(true);}} style={S.othersBtn}>
+              <button onClick={()=>{setOtherName("");setOtherPrice("");setShowOthers(true);}}
+                style={{...S.othersBtn, padding: isMobile ? "18px" : "26px", fontSize: isMobile ? "14px" : "18px"}}>
                 + Others
               </button>
               {showOthers && (
@@ -395,18 +410,19 @@ export default function App() {
                 </div>
               )}
               {cart.length>0 && (
-                <div style={S.floatingCart}>
-                  <span style={{fontWeight:600,fontSize:"15px"}}>
+                <div style={{...S.floatingCart, padding: isMobile ? "16px 28px" : "22px 40px", gap: isMobile ? "18px" : "28px"}}>
+                  <span style={{fontWeight:600, fontSize: isMobile ? "15px" : "20px"}}>
                     {itemCount} item{itemCount>1?"s":""} · RM {total.toFixed(2)}
                   </span>
-                  <button onClick={()=>setStage("cart")} style={S.cartBtn}>View Order →</button>
+                  <button onClick={()=>setStage("cart")}
+                    style={{...S.cartBtn, padding: isMobile ? "10px 22px" : "14px 32px", fontSize: isMobile ? "14px" : "18px"}}>View Order →</button>
                 </div>
               )}
             </>
           )}
 
           {stage==="cart" && (
-            <div style={S.panel}>
+            <div style={{...S.panel, padding: isMobile ? "32px 28px" : "48px 56px"}}>
               <button onClick={()=>setStage("menu")} style={S.back}>← Back to Menu</button>
               <h2 style={S.panelTitle}>Your Order</h2>
               {cart.map(c=>(
@@ -427,12 +443,13 @@ export default function App() {
                 <span style={{fontWeight:600}}>Total</span>
                 <span style={{color:NAVY,fontWeight:"bold",fontSize:"24px"}}>RM {total.toFixed(2)}</span>
               </div>
-              <button onClick={()=>setStage("qr")} style={S.checkoutBtn}>Proceed to Payment</button>
+              <button onClick={()=>setStage("qr")}
+                style={{...S.checkoutBtn, padding: isMobile ? "18px" : "26px", fontSize: isMobile ? "16px" : "22px"}}>Proceed to Payment</button>
             </div>
           )}
 
           {stage==="qr" && (
-            <div style={S.panel}>
+            <div style={{...S.panel, padding: isMobile ? "32px 28px" : "48px 56px"}}>
               <h2 style={S.panelTitle}>Scan to Pay</h2>
               <p style={{color:MUTED,fontSize:"14px",marginBottom:"20px"}}>QR Payment</p>
               <div style={S.qrBox}>
@@ -441,7 +458,12 @@ export default function App() {
                 <div style={{fontSize:"13px",color:MUTED,marginTop:"4px",letterSpacing:"2px"}}>LUNGO COFFEE</div>
               </div>
               <p style={{color:MUTED,fontSize:"13px",textAlign:"center",marginBottom:"20px"}}>Show this screen to staff after paying</p>
-              <button onClick={handlePaymentReceived} style={S.paidBtn}>✓ Payment Received (Staff only)</button>
+              <div style={{display:"flex", gap:"12px"}}>
+                <button onClick={handlePayLater}
+                  style={{...S.paidBtn, flex:1, background:"#6c757d", padding: isMobile ? "16px" : "22px", fontSize: isMobile ? "14px" : "18px"}}>⏳ Pay Later</button>
+                <button onClick={handlePaymentReceived}
+                  style={{...S.paidBtn, flex:2, padding: isMobile ? "16px" : "22px", fontSize: isMobile ? "15px" : "20px"}}>✓ Payment Received (Staff only)</button>
+              </div>
             </div>
           )}
 
@@ -460,7 +482,7 @@ export default function App() {
 
       {/* ══ BARISTA ══ */}
       {view===VIEWS.BARISTA && (
-        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "600px"}}>
+        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "40px 48px 140px"}}>
           <h1 style={S.pageTitle}>Barista Queue</h1>
           {pendingOrders.length===0 ? (
             <div style={S.emptyState}>✅ No pending orders</div>
@@ -470,6 +492,10 @@ export default function App() {
                 <div key={o.id} style={S.orderCard}>
                   <div style={S.orderCardHeader}>
                     <span style={{fontWeight:"bold",fontSize:"16px",color:NAVY}}>Order #{orders.length-orders.indexOf(o)}</span>
+                    {o.paid === false && (
+                      <span style={{background:"#dc3545", color:"white", fontSize:"11px", fontWeight:"bold",
+                        padding:"3px 8px", borderRadius:"4px", letterSpacing:"1px"}}>UNPAID</span>
+                    )}
                     <span style={{fontSize:"12px",color:MUTED,marginLeft:"auto"}}>{formatTime(o.timestamp)}</span>
                   </div>
                   {o.items.map((it,i)=>(
@@ -479,7 +505,14 @@ export default function App() {
                     </div>
                   ))}
                   <div style={S.orderTotal}>Total: RM {o.total.toFixed(2)}</div>
-                  <button onClick={()=>markDone(o.id)} style={S.doneBtn}>✓ Mark as Done</button>
+                  <div style={{display:"flex", gap:"10px"}}>
+                    {o.paid === false && (
+                      <button onClick={()=>markPaid(o.id)}
+                        style={{...S.doneBtn, flex:1, background:"#e07b00", padding: isMobile ? "13px" : "20px", fontSize: isMobile ? "13px" : "16px"}}>💰 Mark as Paid</button>
+                    )}
+                    <button onClick={()=>markDone(o.id)}
+                      style={{...S.doneBtn, flex:2, padding: isMobile ? "13px" : "20px", fontSize: isMobile ? "14px" : "18px"}}>✓ Mark as Done</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -489,7 +522,7 @@ export default function App() {
 
       {/* ══ RECORDS ══ */}
       {view===VIEWS.RECORDS && (
-        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "600px"}}>
+        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "40px 48px 140px"}}>
 
           {/* Header */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"20px"}}>
@@ -518,10 +551,11 @@ export default function App() {
 
               {chartDay && (() => {
                 // All data scoped to selected day
-                const dayOrders = orders
+                const dayOrdersChron = orders
                   .filter(o => getDayKey(o.timestamp) === chartDay)
                   .slice()
-                  .sort((a,b) => a.timestamp - b.timestamp); // oldest first = order #1 first
+                  .sort((a,b) => a.timestamp - b.timestamp); // oldest first for numbering
+                const dayOrders = [...dayOrdersChron].reverse(); // latest first for display
                 const dayRevenue = dayOrders.reduce((s,o)=>s+o.total,0);
 
                 return (
@@ -559,8 +593,8 @@ export default function App() {
                       </span>
                     </div>
                     <div style={S.orderList}>
-                      {dayOrders.map((o, idx)=>{
-                        const orderNum = idx + 1; // resets to 1 each day
+                      {dayOrders.map((o)=>{
+                        const orderNum = dayOrdersChron.indexOf(o) + 1; // #1 = oldest
                         return (
                           <div key={o.id} style={{...S.orderCard,opacity:o.status==="done"?0.7:1}}>
                             <div style={S.orderCardHeader}>
