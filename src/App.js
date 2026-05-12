@@ -132,7 +132,7 @@ function exportToCSV(orders) {
   URL.revokeObjectURL(url);
 }
 
-// ── CHARTS ──
+// -- CHARTS -
 function BarChart({ orders, dayKey }) {
   const dayOrders = orders.filter(o => getDayKey(o.timestamp) === dayKey);
   const itemTotals = {};
@@ -169,7 +169,7 @@ function BarChart({ orders, dayKey }) {
               <rect x={x} y={topPad+chartH-eH} width={barW} height={eH} fill={BLUE_EVE} rx={3} opacity={0.85}/>
               {/* Morning (on top) */}
               <rect x={x} y={topPad+chartH-eH-mH} width={barW} height={mH} fill={ORANGE} rx={3} opacity={0.85}/>
-              {/* Total label — always visible above bar */}
+              {/* Total label -- always visible above bar */}
               {total>0 && <text x={x+barW/2} y={barTop-5} textAnchor="middle" fontSize={12} fill={NAVY} fontWeight="bold">{total}</text>}
               {/* Full name rotated -45deg */}
               <text
@@ -196,12 +196,13 @@ function BarChart({ orders, dayKey }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
 function LineChart({ orders, dayKey }) {
   const dayOrders = orders.filter(o => getDayKey(o.timestamp) === dayKey);
-  // Bucket revenue into 1-hour slots 7am–midnight
+  // Bucket revenue into 1-hour slots 
   const slots = {};
   for (let h=7;h<=24;h++) slots[h]=0;
   dayOrders.forEach(o => {
@@ -243,7 +244,7 @@ function LineChart({ orders, dayKey }) {
         {pts.map((p,i) => p.v>0 && (
           <circle key={i} cx={p.x} cy={p.y} r={4} fill={p.h>=15 ? BLUE_EVE : ORANGE}/>
         ))}
-        {/* X axis labels — every 3hrs */}
+        {/* X axis labels -- every 3hrs */}
         {pts.filter(p=>p.h%3===0).map((p,i)=>(
           <text key={i} x={p.x} y={H-padB+14} textAnchor="middle" fontSize={9} fill={MUTED}>
             {p.h===24?"12am":`${p.h>12?p.h-12:p.h}${p.h>=12?"pm":"am"}`}
@@ -323,10 +324,23 @@ export default function App() {
   const availDays = [...new Set(orders.map(o=>getDayKey(o.timestamp)))].sort((a,b)=>new Date(b)-new Date(a));
   const chartDay = selectedDay || availDays[0] || null;
 
+  const tabletShell = {
+    position:"fixed", inset:0, display:"flex", alignItems:"center",
+    justifyContent:"center", background:"#111", zIndex:0,
+  };
+  const tabletFrame = {
+    position:"relative", zIndex:1,
+    width:"min(100vw, calc(100vh * 1.43))",
+    height:"min(100vh, calc(100vw / 1.43))",
+    overflow:"hidden", display:"flex", flexDirection:"column", background:BG,
+  };
+
   return (
-    <div style={S.root}>
+    <>
+    {!isMobile && <div style={tabletShell}/>}
+    <div style={isMobile ? S.root : {...S.root, ...tabletFrame, minHeight:"unset", position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)"}}>
       {/* NAV */}
-      <nav style={{...S.nav, padding: isMobile ? "16px 24px" : "20px 40px"}}>
+      <nav style={{...S.nav, padding: isMobile ? "16px 24px" : "16px 32px"}}>
         <div style={{...S.logoText, fontSize: isMobile ? "18px" : "24px"}}>LUNGO COFFEE</div>
         <div style={{display:"flex", alignItems:"center", gap: isMobile ? "8px" : "16px"}}>
           <div style={S.navTabs}>
@@ -355,9 +369,9 @@ export default function App() {
         </div>
       </nav>
 
-      {/* ══ CUSTOMER ══ */}
+      {/* == CUSTOMER == */}
       {view===VIEWS.CUSTOMER && (
-        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "40px 48px 140px"}}>
+        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "24px 32px 100px"}}>
           {stage==="menu" && (
             <>
               <div style={{textAlign:"center",marginBottom:"28px"}}>
@@ -422,14 +436,14 @@ export default function App() {
           )}
 
           {stage==="cart" && (
-            <div style={{...S.panel, padding: isMobile ? "32px 28px" : "48px 56px"}}>
+            <div style={{...S.panel, padding: isMobile ? "32px 28px" : "32px 40px"}}>
               <button onClick={()=>setStage("menu")} style={S.back}>← Back to Menu</button>
               <h2 style={S.panelTitle}>Your Order</h2>
               {cart.map(c=>(
                 <div key={c.id} style={S.cartRow}>
                   <span style={{flex:1,fontSize:"16px",color:NAVY}}>{c.name}</span>
                   <div style={S.qtyControls}>
-                    <button onClick={()=>removeItem(c.id)} style={S.qtyBtn}>−</button>
+                    <button onClick={()=>removeItem(c.id)} style={S.qtyBtn}>-</button>
                     <span style={{fontWeight:"bold",minWidth:"24px",textAlign:"center",fontSize:"16px"}}>{c.qty}</span>
                     <button onClick={()=>addItem(c)} style={S.qtyBtn}>+</button>
                   </div>
@@ -449,7 +463,7 @@ export default function App() {
           )}
 
           {stage==="qr" && (
-            <div style={{...S.panel, padding: isMobile ? "32px 28px" : "48px 56px"}}>
+            <div style={{...S.panel, padding: isMobile ? "32px 28px" : "32px 40px"}}>
               <h2 style={S.panelTitle}>Scan to Pay</h2>
               <p style={{color:MUTED,fontSize:"14px",marginBottom:"20px"}}>QR Payment</p>
               <div style={S.qrBox}>
@@ -480,9 +494,9 @@ export default function App() {
         </div>
       )}
 
-      {/* ══ BARISTA ══ */}
+      {/* == BARISTA == */}
       {view===VIEWS.BARISTA && (
-        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "40px 48px 140px"}}>
+        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "24px 32px 100px"}}>
           <h1 style={S.pageTitle}>Barista Queue</h1>
           {pendingOrders.length===0 ? (
             <div style={S.emptyState}>✅ No pending orders</div>
@@ -520,9 +534,9 @@ export default function App() {
         </div>
       )}
 
-      {/* ══ RECORDS ══ */}
+      {/* == RECORDS == */}
       {view===VIEWS.RECORDS && (
-        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "40px 48px 140px"}}>
+        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "24px 32px 100px"}}>
 
           {/* Header */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"20px"}}>
@@ -537,7 +551,7 @@ export default function App() {
             <div style={S.emptyState}>No records yet.</div>
           ) : (
             <>
-              {/* ── Day selector — controls EVERYTHING below ── */}
+              {/* -- Day selector -- controls EVERYTHING below -- */}
               <div style={{marginBottom:"20px"}}>
                 <label style={{fontSize:"12px",color:MUTED,letterSpacing:"1px",textTransform:"uppercase",display:"block",marginBottom:"6px"}}>
                   Viewing date:
@@ -560,7 +574,7 @@ export default function App() {
 
                 return (
                   <>
-                    {/* Summary cards — scoped to day */}
+                    {/* Summary cards -- scoped to day */}
                     <div style={S.summaryBar}>
                       {[
                         {num: dayOrders.length,              label:"Orders Today"},
@@ -576,17 +590,17 @@ export default function App() {
 
                     {/* Bar chart */}
                     <div style={S.chartCard}>
-                      <h3 style={S.chartTitle}>Drinks Sold — {chartDay}</h3>
+                      <h3 style={S.chartTitle}>Drinks Sold -- {chartDay}</h3>
                       <BarChart orders={orders} dayKey={chartDay}/>
                     </div>
 
                     {/* Line chart */}
                     <div style={S.chartCard}>
-                      <h3 style={S.chartTitle}>Revenue by Time — {chartDay}</h3>
+                      <h3 style={S.chartTitle}>Revenue by Time -- {chartDay}</h3>
                       <LineChart orders={orders} dayKey={chartDay}/>
                     </div>
 
-                    {/* Order list — per-day numbering starting at 1, revenue starting at 0 */}
+                    {/* Order list -- per-day numbering starting at 1, revenue starting at 0 */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px",marginTop:"8px"}}>
                       <span style={{fontSize:"13px",color:MUTED}}>
                         {dayOrders.length} order{dayOrders.length!==1?"s":""} · RM {dayRevenue.toFixed(2)} total
