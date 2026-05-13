@@ -196,7 +196,6 @@ function BarChart({ orders, dayKey }) {
         </div>
       </div>
     </div>
-    </>
   );
 }
 
@@ -324,21 +323,8 @@ export default function App() {
   const availDays = [...new Set(orders.map(o=>getDayKey(o.timestamp)))].sort((a,b)=>new Date(b)-new Date(a));
   const chartDay = selectedDay || availDays[0] || null;
 
-  const tabletShell = {
-    position:"fixed", inset:0, display:"flex", alignItems:"center",
-    justifyContent:"center", background:"#111", zIndex:0,
-  };
-  const tabletFrame = {
-    position:"relative", zIndex:1,
-    width:"min(100vw, calc(100vh * 1.43))",
-    height:"min(100vh, calc(100vw / 1.43))",
-    overflow:"hidden", display:"flex", flexDirection:"column", background:BG,
-  };
-
   return (
-    <>
-    {!isMobile && <div style={tabletShell}/>}
-    <div style={isMobile ? S.root : {...S.root, ...tabletFrame, minHeight:"unset", position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)"}}>
+    <div style={S.root}>
       {/* NAV */}
       <nav style={{...S.nav, padding: isMobile ? "16px 24px" : "16px 32px"}}>
         <div style={{...S.logoText, fontSize: isMobile ? "18px" : "24px"}}>LUNGO COFFEE</div>
@@ -371,7 +357,7 @@ export default function App() {
 
       {/* == CUSTOMER == */}
       {view===VIEWS.CUSTOMER && (
-        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "24px 32px 100px"}}>
+        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "720px", padding: isMobile ? "32px 24px 120px" : "24px 32px 100px"}}>
           {stage==="menu" && (
             <>
               <div style={{textAlign:"center",marginBottom:"28px"}}>
@@ -496,7 +482,7 @@ export default function App() {
 
       {/* == BARISTA == */}
       {view===VIEWS.BARISTA && (
-        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "24px 32px 100px"}}>
+        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "720px", padding: isMobile ? "32px 24px 120px" : "24px 32px 100px"}}>
           <h1 style={S.pageTitle}>Barista Queue</h1>
           {pendingOrders.length===0 ? (
             <div style={S.emptyState}>✅ No pending orders</div>
@@ -536,7 +522,7 @@ export default function App() {
 
       {/* == RECORDS == */}
       {view===VIEWS.RECORDS && (
-        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "100%", padding: isMobile ? "32px 24px 120px" : "24px 32px 100px"}}>
+        <div style={{...S.wrap, maxWidth: isMobile ? "390px" : "720px", padding: isMobile ? "32px 24px 120px" : "24px 32px 100px"}}>
 
           {/* Header */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"20px"}}>
