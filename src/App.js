@@ -270,6 +270,8 @@ export default function App() {
   const [otherName, setOtherName]     = useState("");
   const [otherPrice, setOtherPrice]   = useState("");
   const [selectedDay, setSelectedDay] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [editingOrder, setEditingOrder] = useState(null);
 
   useEffect(() => {
     try {
@@ -316,6 +318,16 @@ export default function App() {
   };
   const markDone = id => saveOrders(prev=>prev.map(o=>o.id===id?{...o,status:"done"}:o));
   const markPaid = id => saveOrders(prev=>prev.map(o=>o.id===id?{...o,paid:true}:o));
+  const deleteOrder = id => saveOrders(prev=>prev.filter(o=>o.id!==id));
+  const updateOrderTime = (id, newTimeStr) => {
+    saveOrders(prev=>prev.map(o=>{
+      if (o.id!==id) return o;
+      const d = new Date(o.timestamp);
+      const [h,m] = newTimeStr.split(":").map(Number);
+      d.setHours(h, m, 0, 0);
+      return {...o, timestamp: d.getTime()};
+    }));
+  };
 
   const pendingOrders = orders.filter(o=>o.status==="pending");
 
@@ -529,7 +541,15 @@ export default function App() {
             <h1 style={{...S.pageTitle,marginBottom:0}}>Records</h1>
             <div style={{display:"flex",gap:"8px"}}>
               <button onClick={()=>exportToCSV(orders)} style={S.exportBtn}>↓ Export CSV</button>
-              <button onClick={()=>{if(window.confirm("Clear all records? This cannot be undone.")){saveOrders([]);}}} style={S.clearBtn}>✕ Clear</button>
+              {confirmDeleteId === "ALL" ? (
+                <span style={{display:"flex",gap:"6px",alignItems:"center"}}>
+                  <span style={{fontSize:"12px",color:"#dc3545"}}>Clear all?</span>
+                  <button onClick={()=>{saveOrders([]);setConfirmDeleteId(null);}} style={{...S.clearBtn,background:"#dc3545"}}>Yes</button>
+                  <button onClick={()=>setConfirmDeleteId(null)} style={S.clearBtn}>No</button>
+                </span>
+              ) : (
+                <button onClick={()=>setConfirmDeleteId("ALL")} style={S.clearBtn}>✕ Clear</button>
+              )}
             </div>
           </div>
 
@@ -603,6 +623,20 @@ export default function App() {
                                 {o.status==="done"?"✓ Done":"⏳ Pending"}
                               </span>
                               <span style={{fontSize:"12px",color:MUTED,marginLeft:"auto"}}>{formatTime(o.timestamp)}</span>
+                              <button onClick={()=>setEditingOrder({order:o, newTime: new Date(o.timestamp).toTimeString().slice(0,5)})}
+                                style={S.iconBtn} title="Edit time">✏️</button>
+                              {confirmDeleteId === o.id ? (
+                                <span style={{display:"flex",gap:"4px",alignItems:"center"}}>
+                                  <span style={{fontSize:"11px",color:"#dc3545"}}>Delete?</span>
+                                  <button onClick={()=>{deleteOrder(o.id);setConfirmDeleteId(null);}}
+                                    style={{...S.iconBtn,color:"#dc3545",fontWeight:"bold",fontSize:"12px"}}>Yes</button>
+                                  <button onClick={()=>setConfirmDeleteId(null)}
+                                    style={{...S.iconBtn,fontSize:"12px"}}>No</button>
+                                </span>
+                              ) : (
+                                <button onClick={()=>setConfirmDeleteId(o.id)}
+                                  style={{...S.iconBtn,color:"#dc3545"}} title="Delete">🗑</button>
+                              )}
                             </div>
                             {o.items.map((it,i)=>(
                               <div key={i} style={S.orderItem}>
@@ -620,6 +654,32 @@ export default function App() {
               })()}
             </>
           )}
+        </div>
+      )}
+
+      {/* == EDIT ORDER MODAL == */}
+      {editingOrder && (
+        <div style={S.modalOverlay} onClick={()=>setEditingOrder(null)}>
+          <div style={{...S.modal, minWidth:"280px"}} onClick={e=>e.stopPropagation()}>
+            <h3 style={{margin:"0 0 4px",color:NAVY,fontSize:"16px"}}>Edit Order Time</h3>
+            <p style={{margin:"0 0 16px",fontSize:"12px",color:MUTED}}>
+              Currently: {formatTime(editingOrder.order.timestamp)}
+            </p>
+            <input
+              type="time"
+              value={editingOrder.newTime}
+              onChange={e=>setEditingOrder(prev=>({...prev,newTime:e.target.value}))}
+              style={{width:"100%",padding:"12px",fontSize:"20px",borderRadius:"8px",
+                border:"2px solid "+NAVY,textAlign:"center",marginBottom:"16px",
+                boxSizing:"border-box",fontFamily:"inherit",color:NAVY}}
+            />
+            <div style={{display:"flex",gap:"10px"}}>
+              <button onClick={()=>setEditingOrder(null)}
+                style={{...S.doneBtn,flex:1,background:"#aaa",padding:"12px"}}>Cancel</button>
+              <button onClick={()=>{updateOrderTime(editingOrder.order.id,editingOrder.newTime);setEditingOrder(null);}}
+                style={{...S.doneBtn,flex:2,padding:"12px"}}>Save Time</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -696,6 +756,7 @@ const S = {
     border:`1px solid ${NAVY}20` },
   orderCardHeader:{ display:"flex", alignItems:"center", gap:"10px",
     marginBottom:"12px", flexWrap:"wrap" },
+  iconBtn:{ background:"none", border:"none", cursor:"pointer", fontSize:"15px", padding:"2px 4px", lineHeight:1, flexShrink:0 },
   orderItem:{ display:"flex", justifyContent:"space-between",
     padding:"6px 0", fontSize:"14px", color:MUTED },
   orderTotal:{ fontWeight:"bold", color:NAVY, marginTop:"10px",
